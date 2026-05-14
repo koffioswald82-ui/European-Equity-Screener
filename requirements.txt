@@ -1,0 +1,24 @@
+# core data
+yfinance>=0.2.40
+financedatabase>=2.2.1
+pandas>=2.2.0
+numpy>=1.26.0
+pyarrow>=15.0.0        # parquet cache
+
+# scoring / optimisation
+scipy>=1.13.0
+
+# NLP sentiment (torch omis pour Streamlit Cloud — FinBERT désactivé en cloud)
+transformers>=4.40.0
+
+# backtesting & metrics
+quantstats>=0.0.62
+
+# visualisation
+plotly>=5.22.0
+
+# UI
+streamlit>=1.35.0
+
+# testing
+pytest>=8.0.0
