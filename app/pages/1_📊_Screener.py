@@ -110,11 +110,12 @@ with st.spinner("Computing composite scores..."):
 top = scored.head(top_n).copy()
 
 # ── info temporelle ────────────────────────────────────────────────────────────
+_sent_line = ("  \n> " + sentiment_info) if sentiment_info else ""
 st.markdown(f"""
 > 🕐 **Screener run:** {run_date}
 > {price_info}
 > {cache_info}
-> {"  \n> " + sentiment_info if sentiment_info else ""}
+> {_sent_line}
 """)
 
 # Compter les actions avec données valides vs vides
