@@ -1,68 +1,93 @@
 """
-Sentiment analysis pipeline — trois niveaux de fallback :
-  1. HuggingFace Inference API (FinBERT via HTTP, pas besoin de torch)
-  2. FinBERT local via transformers+torch (si installé)
-  3. VADER  (vaderSentiment, pur Python, léger, fallback garanti)
+Sentiment analysis — cascade :
+  1. HuggingFace Inference API (FinBERT HTTP, sans torch)
+  2. FinBERT local (transformers+torch, si disponible)
+  3. VADER (vaderSentiment, pur Python, toujours disponible)
 """
 import os
 import time
 import pandas as pd
 import yfinance as yf
 
-# ── niveau 1 : HF Inference API ───────────────────────────────────────────────
 HF_API_URL = "https://api-inference.huggingface.co/models/ProsusAI/finbert"
-HF_TOKEN   = os.environ.get("HF_TOKEN", "")   # optionnel — améliore la limite de taux
+HF_TOKEN   = os.environ.get("HF_TOKEN", "")
 
+
+# ── extraction des textes (robuste aux changements de format yfinance) ─────────
+
+def _get_news_texts(ticker: str) -> list[str]:
+    """Retourne la liste des textes (titre + résumé) des dernières news."""
+    try:
+        # Utilise la session partagée si disponible
+        try:
+            from screener.data import _SESSION
+            t = yf.Ticker(ticker, session=_SESSION)
+        except Exception:
+            t = yf.Ticker(ticker)
+
+        news = t.news or []
+        texts = []
+        for n in news[:10]:
+            # yfinance >= 0.2.x : titre dans "title" ou "headline"
+            # résumé dans "summary", "description", ou absent
+            title   = (n.get("title") or n.get("headline") or "").strip()
+            summary = (n.get("summary") or n.get("description") or
+                       n.get("content") or "").strip()
+            text = f"{title}. {summary}" if summary else title
+            if text:
+                texts.append(text[:512])   # tronque à 512 chars
+        return texts
+    except Exception:
+        return []
+
+
+# ── niveau 1 : HF Inference API ───────────────────────────────────────────────
 
 def _hf_api_score(texts: list[str]) -> list[float] | None:
-    """
-    Envoie les textes à l'API Inference HuggingFace.
-    Retourne une liste de scores nets [pos - neg] ou None si l'API échoue.
-    """
     try:
         import requests
         headers = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
-        # L'API accepte max ~500 tokens par texte ; on tronque
-        truncated = [t[:400] for t in texts]
         resp = requests.post(
             HF_API_URL,
             headers=headers,
-            json={"inputs": truncated},
-            timeout=20,
+            json={"inputs": [t[:400] for t in texts]},
+            timeout=25,
         )
+        # Modèle en cours de chargement → on attend et on réessaie
         if resp.status_code == 503:
-            # Modèle en cours de chargement côté HF — on attend et on réessaie
-            time.sleep(15)
+            time.sleep(20)
             resp = requests.post(HF_API_URL, headers=headers,
-                                 json={"inputs": truncated}, timeout=20)
+                                 json={"inputs": [t[:400] for t in texts]},
+                                 timeout=25)
         if resp.status_code != 200:
             return None
 
         data = resp.json()
-        # Réponse : [[{"label":"positive","score":0.8},…], […], …]
+        # Cas : erreur renvoyée en JSON
+        if isinstance(data, dict) and "error" in data:
+            return None
         if not isinstance(data, list) or not data:
             return None
 
         scores = []
         for item in data:
+            # item peut être une liste ou un dict selon le nb de textes envoyés
             if isinstance(item, list):
                 d = {x["label"]: x["score"] for x in item}
             elif isinstance(item, dict) and "label" in item:
-                # réponse à un seul texte (liste aplatie)
                 d = {item["label"]: item["score"]}
             else:
                 scores.append(0.0)
                 continue
             scores.append(d.get("positive", 0.0) - d.get("negative", 0.0))
         return scores if scores else None
-
     except Exception:
         return None
 
 
-# ── niveau 2 : FinBERT local (torch) ─────────────────────────────────────────
-_local_pipe = None
+# ── niveau 2 : FinBERT local ──────────────────────────────────────────────────
 
+_local_pipe = None
 
 def _local_finbert_score(texts: list[str]) -> list[float] | None:
     global _local_pipe
@@ -77,18 +102,18 @@ def _local_finbert_score(texts: list[str]) -> list[float] | None:
                 max_length=512,
             )
         results = _local_pipe(texts)
-        scores = []
-        for r in results:
-            d = {x["label"]: x["score"] for x in r}
-            scores.append(d.get("positive", 0.0) - d.get("negative", 0.0))
-        return scores
+        return [
+            {x["label"]: x["score"] for x in r}.get("positive", 0.0)
+            - {x["label"]: x["score"] for x in r}.get("negative", 0.0)
+            for r in results
+        ]
     except Exception:
         return None
 
 
-# ── niveau 3 : VADER (fallback garanti) ──────────────────────────────────────
-_vader = None
+# ── niveau 3 : VADER ──────────────────────────────────────────────────────────
 
+_vader = None
 
 def _vader_score(texts: list[str]) -> list[float]:
     global _vader
@@ -102,26 +127,16 @@ def _vader_score(texts: list[str]) -> list[float]:
 
 
 # ── fonction publique ─────────────────────────────────────────────────────────
-def get_sentiment_score(ticker: str) -> dict:
-    """
-    Retourne un score net bullish [-1, +1] pour un titre.
-    Essaie HF API → FinBERT local → VADER dans cet ordre.
-    """
-    neutral = {"ticker": ticker, "sentiment_score": 0.0,
-               "label": "neutral", "n_articles": 0, "method": "none"}
-    try:
-        news = yf.Ticker(ticker).news[:10]
-    except Exception:
-        return neutral
 
-    texts = [
-        n.get("title", "") + ". " + n.get("summary", "")
-        for n in news if n.get("title")
-    ]
+def get_sentiment_score(ticker: str) -> dict:
+    """Retourne score net bullish [-1, +1] pour un titre."""
+    neutral = {"ticker": ticker, "sentiment_score": 0.0,
+               "label": "neutral", "n_articles": 0, "method": "no_news"}
+
+    texts = _get_news_texts(ticker)
     if not texts:
         return neutral
 
-    # Cascade
     net_scores = _hf_api_score(texts)
     method = "finbert-api"
     if net_scores is None:
@@ -143,7 +158,6 @@ def get_sentiment_score(ticker: str) -> dict:
 
 
 def batch_sentiment(tickers: list[str], progress: bool = False) -> pd.DataFrame:
-    """Score sentiment pour une liste de tickers. Retourne un DataFrame."""
     rows = []
     for i, t in enumerate(tickers):
         if progress:
