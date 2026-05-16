@@ -1,4 +1,5 @@
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-exec(open(Path(__file__).resolve().parents[1] / "app" / "ui_optimizer.py").read())
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+exec(open(ROOT / "app" / "pages" / "2_🏗️_Optimizer.py").read())
