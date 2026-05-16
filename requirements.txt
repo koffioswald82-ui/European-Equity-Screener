@@ -3,20 +3,19 @@ yfinance>=0.2.40
 financedatabase>=2.2.1
 pandas>=2.2.0
 numpy>=1.26.0
-pyarrow>=15.0.0        # parquet cache
+pyarrow>=15.0.0
+requests>=2.31.0
 
 # scoring / optimisation
 scipy>=1.13.0
 
 # NLP sentiment
-# HF Inference API (HTTP) → FinBERT sans torch
-requests>=2.31.0
-# VADER : fallback léger si API HF indisponible
-vaderSentiment>=3.3.2
-# transformers : optionnel, utilisé si torch est présent localement
+# torch CPU — disponible sur HF Spaces, omis sur Streamlit Cloud
+torch>=2.2.0
 transformers>=4.40.0
+vaderSentiment>=3.3.2
 
-# backtesting & metrics
+# backtesting & métriques
 quantstats>=0.0.62
 
 # visualisation
