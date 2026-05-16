@@ -6,49 +6,50 @@ colorTo: yellow
 sdk: docker
 pinned: true
 license: mit
-short_description: Multi-factor screener & Markowitz optimizer
+short_description: Multi-factor screener & portfolio optimizer
 ---
 
-# 🇪🇺 European Equity Screener
+# European Equity Screener
 
-**Réalisé par Oswald Jaures KOFFI**
+**Developed by Oswald Jaures KOFFI**
 
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.35%2B-FF4B4B)
 ![License: MIT](https://img.shields.io/badge/License-MIT-0F6E56)
 
-Pipeline Python end-to-end pour **screener, scorer et optimiser** des portefeuilles d'actions européennes large cap. Combine analyse fondamentale multi-facteurs, sentiment NLP (FinBERT) et optimisation Markowitz dans une interface Streamlit interactive.
+End-to-end Python platform for screening, scoring and optimising portfolios of European large-cap equities. Combines multi-factor fundamental analysis, NLP sentiment (FinBERT) and professional-grade portfolio construction models in an interactive Streamlit interface.
 
-## Fonctionnalités
+## Features
 
-- Univers de ~600 actions européennes (France, Allemagne, Italie, Pays-Bas, Espagne…)
-- Scoring composite : **Value · Quality · Momentum · Révisions analystes**
-- Sentiment NLP via **FinBERT** (HuggingFace) + fallback VADER
-- **Optimisation Markowitz** — Max Sharpe, Min Variance, frontière efficiente
-- **Backtest walk-forward** vs Euro Stoxx 50 — Sharpe, drawdown, alpha/beta, IR
-- Cache Parquet local pour accélérer les relances
-- Export CSV des résultats
+- Universe of ~600 European equities (France, Germany, Italy, Netherlands, Spain...)
+- Composite scoring: **Value · Quality · Momentum · Analyst Revisions**
+- NLP sentiment via **FinBERT** (HuggingFace) with VADER fallback
+- **Multi-model optimizer** — Markowitz Max Sharpe, Min Variance, Black-Litterman, Risk Parity
+- **Ledoit-Wolf shrinkage** covariance estimator for robust portfolio construction
+- **Walk-forward backtest** vs Euro Stoxx 50 — Sharpe, drawdown, alpha/beta, IR
+- Parquet cache for fast subsequent runs
+- CSV export of results
 
 ## Pages
 
 | Page | Description |
 |---|---|
-| 📊 Screener | Filtrer et classer les actions sur 4 facteurs + sentiment |
-| 🏗️ Optimizer | Construire un portefeuille optimal sur la frontière efficiente |
-| 📈 Backtest | Simulation walk-forward vs Euro Stoxx 50 avec tearsheet complet |
+| Screener | Filter and rank stocks on 4 factors + sentiment |
+| Optimizer | Build portfolios with Markowitz, Black-Litterman and Risk Parity models |
+| Backtest | Walk-forward simulation vs Euro Stoxx 50 with full tearsheet |
 
-## Stack technique
+## Technical stack
 
-| Librairie | Rôle |
+| Library | Role |
 |---|---|
-| yfinance + stooq | Données OHLCV + fondamentaux |
-| financedatabase | Univers investissable européen |
-| FinBERT (HuggingFace) | Analyse de sentiment NLP |
-| scipy.optimize | Optimisation Markowitz (SLSQP) |
-| quantstats | Métriques backtest |
-| Streamlit | Interface + déploiement |
+| yfinance + financedatabase | OHLCV data + European universe |
+| scikit-learn | Ledoit-Wolf covariance shrinkage |
+| scipy.optimize | SLSQP optimisation (Sharpe, ERC, BL) |
+| FinBERT (HuggingFace) | NLP sentiment analysis |
+| quantstats | Backtest metrics |
+| Streamlit | Interface + deployment |
 
-## Installation locale
+## Local installation
 
 ```bash
 git clone https://github.com/koffioswald82-ui/European-Equity-Screener
@@ -61,5 +62,5 @@ streamlit run app/main.py
 
 ```bash
 docker build -t equity-screener .
-docker run -p 8501:8501 equity-screener
+docker run -p 7860:7860 equity-screener
 ```
