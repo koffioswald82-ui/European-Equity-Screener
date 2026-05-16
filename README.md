@@ -3,10 +3,7 @@ title: European Equity Screener
 emoji: 📊
 colorFrom: indigo
 colorTo: yellow
-sdk: streamlit
-sdk_version: 1.41.0
-app_file: app/main.py
-python_version: "3.11"
+sdk: docker
 pinned: true
 license: mit
 short_description: Multi-factor screener & Markowitz optimizer
