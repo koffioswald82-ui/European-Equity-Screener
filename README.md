@@ -4,8 +4,9 @@ emoji: 📊
 colorFrom: indigo
 colorTo: yellow
 sdk: streamlit
-sdk_version: 1.35.0
+sdk_version: 1.41.0
 app_file: app/main.py
+python_version: "3.11"
 pinned: true
 license: mit
 short_description: Multi-factor screener & Markowitz optimizer
