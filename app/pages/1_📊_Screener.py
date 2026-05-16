@@ -29,7 +29,8 @@ _SECTOR_ALIASES = {
 }
 
 st.set_page_config(page_title="Screener", page_icon="📊", layout="wide")
-st.title("📊 Multi-factor Equity Screener")
+st.title("Multi-factor Equity Screener")
+st.markdown("**Developed by Oswald Jaures KOFFI**")
 
 # ── sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -55,7 +56,7 @@ with st.sidebar:
     w_revision = st.slider("Revision", 0, 100, int(WEIGHTS["revision"] * 100), 5) / 100
     include_sentiment = st.checkbox("Include FinBERT sentiment (slow)", value=False)
     top_n = st.slider("Show top N", 10, 100, 30)
-    run = st.button("▶ Run screener", type="primary")
+    run = st.button("Run screener", type="primary")
     st.markdown("---")
     if st.button("🗑️ Clear cache"):
         from screener.data import clear_cache
@@ -66,7 +67,7 @@ with st.sidebar:
 run_date = datetime.now(timezone.utc).strftime("%d %B %Y at %H:%M UTC")
 
 if not run:
-    st.info("Configure filters in the sidebar and click **▶ Run screener**.")
+    st.info("Configure filters in the sidebar and click **Run screener**.")
     st.stop()
 
 # ── run ────────────────────────────────────────────────────────────────────────
@@ -190,4 +191,4 @@ st.download_button(
 )
 
 st.markdown("---")
-st.caption("Réalisé par **Oswald Jaures KOFFI**")
+st.caption("Developed by **Oswald Jaures KOFFI**")
