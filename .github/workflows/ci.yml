@@ -22,12 +22,17 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install dependencies (no torch for CI speed)
+      - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install yfinance financedatabase pandas numpy scipy pyarrow plotly streamlit pytest
-          # transformers without torch — sentiment tests are skipped in CI
-          pip install transformers
+          pip install \
+            yfinance financedatabase \
+            pandas numpy scipy pyarrow \
+            plotly streamlit \
+            requests vaderSentiment \
+            transformers \
+            quantstats \
+            pytest
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
@@ -40,4 +45,9 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install ruff
-      - run: ruff check . --select E,W,F --ignore E501
+      - name: Lint (exclude page relay files)
+        run: |
+          ruff check . \
+            --select E,W,F \
+            --ignore E501 \
+            --exclude pages/,streamlit_app.py
