@@ -75,17 +75,22 @@ def composite_score(
     df["revision_score"] = compute_revision_score(df)
 
     mom = compute_momentum_score(prices_aligned)
-    df["momentum_score"] = mom.reindex(df.index).fillna(0)
+    mom_aligned = mom.reindex(df.index)
+    prices_available = mom_aligned.notna().any()
+    if prices_available:
+        df["momentum_score"] = mom_aligned.fillna(0)
+    # If no price data, skip momentum_score column entirely
 
     if sentiment is not None and not sentiment.empty:
         sent = sentiment.set_index("ticker")["sentiment_score"].reindex(df.index).fillna(0)
         df["sentiment_score"] = sent
 
-    # Composite (weighted sum of available factor scores)
+    # Composite — only include factors with actual data, then renormalise weights
+    active = {k: v for k, v in WEIGHTS.items() if f"{k}_score" in df.columns}
+    total_w = sum(active.values()) or 1.0
     composite = sum(
-        df[f"{k}_score"].fillna(0) * v
-        for k, v in WEIGHTS.items()
-        if f"{k}_score" in df.columns
+        df[f"{k}_score"].fillna(0) * (v / total_w)
+        for k, v in active.items()
     )
 
     # Percentile rank → [0, 100]
