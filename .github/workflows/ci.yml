@@ -46,4 +46,4 @@ jobs:
           python-version: "3.11"
       - run: pip install ruff
       - name: Lint
-        run: ruff check screener/ optimizer/ backtest/ tests/ app/main.py app/ui_screener.py app/ui_optimizer.py app/ui_backtest.py --select E,W,F --ignore E501
+        run: ruff check .

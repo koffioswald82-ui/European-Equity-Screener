@@ -1,0 +1,8 @@
+[lint]
+select = ["E", "W", "F"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+"app/pages/*.py" = ["E402", "F401"]
+"pages/*.py"     = ["E402", "F401"]
+"streamlit_app.py" = ["E402", "F401"]
