@@ -8,7 +8,12 @@ pyarrow>=15.0.0        # parquet cache
 # scoring / optimisation
 scipy>=1.13.0
 
-# NLP sentiment (torch omis pour Streamlit Cloud — FinBERT désactivé en cloud)
+# NLP sentiment
+# HF Inference API (HTTP) → FinBERT sans torch
+requests>=2.31.0
+# VADER : fallback léger si API HF indisponible
+vaderSentiment>=3.3.2
+# transformers : optionnel, utilisé si torch est présent localement
 transformers>=4.40.0
 
 # backtesting & metrics
