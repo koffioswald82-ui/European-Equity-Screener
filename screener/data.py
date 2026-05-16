@@ -24,23 +24,47 @@ _SESSION.headers.update({
 
 
 def fetch_ohlcv(tickers: list[str], period: str = "3y") -> pd.DataFrame:
-    """Télécharge les prix de clôture ajustés pour une liste de tickers."""
+    """
+    Télécharge les prix de clôture ajustés.
+    Stratégie :
+      1. yf.download() batch (rapide)
+      2. yf.Ticker().history() individuel (fallback cloud)
+    """
     if not tickers:
         return pd.DataFrame()
+
+    # ── tentative 1 : batch download ──────────────────────────────────────────
     try:
-        raw = yf.download(
-            tickers, period=period, auto_adjust=True,
-            progress=False, session=_SESSION,
-        )
+        raw = yf.download(tickers, period=period, auto_adjust=True, progress=False)
+        if not raw.empty:
+            if isinstance(raw.columns, pd.MultiIndex):
+                prices = raw["Close"]
+            else:
+                col = "Close"
+                prices = raw[[col]].rename(columns={col: tickers[0]})
+            prices = prices.dropna(how="all")
+            if not prices.empty:
+                return prices
     except Exception:
-        return pd.DataFrame()
+        pass
 
-    if isinstance(raw.columns, pd.MultiIndex):
-        prices = raw["Close"]
-    else:
-        prices = raw[["Close"]] if len(tickers) > 1 else raw.rename(columns={"Close": tickers[0]})
+    # ── tentative 2 : history() individuel (fonctionne sur Streamlit Cloud) ───
+    price_map: dict = {}
+    for i, ticker in enumerate(tickers):
+        if i > 0 and i % 10 == 0:
+            time.sleep(1)          # anti-rate-limit
+        try:
+            hist = yf.Ticker(ticker, session=_SESSION).history(
+                period=period, auto_adjust=True
+            )
+            if not hist.empty and "Close" in hist.columns:
+                price_map[ticker] = hist["Close"]
+        except Exception:
+            pass
 
-    return prices.dropna(how="all")
+    if price_map:
+        return pd.DataFrame(price_map).dropna(how="all")
+    return pd.DataFrame()
 
 
 def _safe_get(info: dict, *keys, default=None):

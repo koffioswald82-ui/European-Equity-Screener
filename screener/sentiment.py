@@ -12,30 +12,73 @@ import yfinance as yf
 HF_API_URL = "https://api-inference.huggingface.co/models/ProsusAI/finbert"
 HF_TOKEN   = os.environ.get("HF_TOKEN", "")
 
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+}
 
-# ── extraction des textes (robuste aux changements de format yfinance) ─────────
+
+# ── extraction des textes ──────────────────────────────────────────────────────
 
 def _get_news_texts(ticker: str) -> list[str]:
-    """Retourne la liste des textes (titre + résumé) des dernières news."""
-    try:
-        # Utilise la session partagée si disponible
-        try:
-            from screener.data import _SESSION
-            t = yf.Ticker(ticker, session=_SESSION)
-        except Exception:
-            t = yf.Ticker(ticker)
+    """
+    Récupère les titres de news via :
+      1. Flux RSS Yahoo Finance (fonctionne sur cloud, pas d'API bloquée)
+      2. yfinance .news en fallback
+    """
+    texts = _rss_texts(ticker)
+    if not texts:
+        texts = _yf_news_texts(ticker)
+    return texts
 
-        news = t.news or []
+
+def _rss_texts(ticker: str) -> list[str]:
+    """
+    Google News RSS — fonctionne depuis Streamlit Cloud, pas d'auth requise.
+    On cherche le nom court du ticker (ex: ASML, LVMH) pour de meilleurs résultats.
+    """
+    try:
+        import requests
+        from xml.etree import ElementTree as ET
+
+        # Nettoie le ticker pour la recherche (enlève .PA, .DE, etc.)
+        company = ticker.split(".")[0]
+        query   = f"{company}+stock+earnings"
+        url     = (
+            f"https://news.google.com/rss/search"
+            f"?q={query}&hl=en-US&gl=US&ceid=US:en"
+        )
+        resp = requests.get(url, headers=_HEADERS, timeout=12)
+        if resp.status_code != 200:
+            return []
+
+        root  = ET.fromstring(resp.content)
+        texts = []
+        for item in root.findall(".//item")[:10]:
+            title = (item.findtext("title") or "").strip()
+            # Google News met du HTML dans description — on garde juste le titre
+            text  = title
+            if text:
+                texts.append(text[:512])
+        return texts
+    except Exception:
+        return []
+
+
+def _yf_news_texts(ticker: str) -> list[str]:
+    """Fallback : yfinance .news (peut être bloqué sur cloud)."""
+    try:
+        news = yf.Ticker(ticker).news or []
         texts = []
         for n in news[:10]:
-            # yfinance >= 0.2.x : titre dans "title" ou "headline"
-            # résumé dans "summary", "description", ou absent
             title   = (n.get("title") or n.get("headline") or "").strip()
-            summary = (n.get("summary") or n.get("description") or
-                       n.get("content") or "").strip()
+            summary = (n.get("summary") or n.get("description") or "").strip()
             text = f"{title}. {summary}" if summary else title
             if text:
-                texts.append(text[:512])   # tronque à 512 chars
+                texts.append(text[:512])
         return texts
     except Exception:
         return []
