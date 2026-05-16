@@ -53,7 +53,8 @@ def alpha_beta(
         return 0.0, 1.0
     strat  = aligned.iloc[:, 0] - rf / periods
     bench  = aligned.iloc[:, 1] - rf / periods
-    beta   = float(np.cov(strat, bench)[0, 1] / np.var(bench).clip(1e-9))
+    bench_var = max(float(np.var(bench)), 1e-9)
+    beta   = float(np.cov(strat, bench)[0, 1] / bench_var)
     alpha  = float((strat.mean() - beta * bench.mean()) * periods)
     return alpha, beta
 
