@@ -8,6 +8,7 @@ requests>=2.31.0
 
 # scoring / optimisation
 scipy>=1.13.0
+scikit-learn>=1.4.0
 
 # NLP sentiment
 # torch CPU — disponible sur HF Spaces, omis sur Streamlit Cloud
