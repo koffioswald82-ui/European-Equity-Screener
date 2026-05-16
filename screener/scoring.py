@@ -76,10 +76,10 @@ def composite_score(
 
     mom = compute_momentum_score(prices_aligned)
     mom_aligned = mom.reindex(df.index)
-    prices_available = mom_aligned.notna().any()
-    if prices_available:
+    coverage = mom_aligned.notna().mean() if len(mom_aligned) else 0.0
+    if coverage >= 0.5:
         df["momentum_score"] = mom_aligned.fillna(0)
-    # If no price data, skip momentum_score column entirely
+    # < 50% coverage → skip momentum entirely (prices blocked on cloud)
 
     if sentiment is not None and not sentiment.empty:
         sent = sentiment.set_index("ticker")["sentiment_score"].reindex(df.index).fillna(0)

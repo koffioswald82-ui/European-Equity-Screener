@@ -13,6 +13,21 @@ from screener.universe import get_universe, EU_COUNTRIES
 from screener.data import fetch_fundamentals, fetch_ohlcv, CACHE_DIR
 from screener.scoring import composite_score, WEIGHTS
 
+# yfinance sector names differ from GICS UI labels
+_SECTOR_ALIASES = {
+    "Financials":             ["Financials", "Financial Services"],
+    "Technology":             ["Technology"],
+    "Consumer Discretionary": ["Consumer Discretionary", "Consumer Cyclical"],
+    "Consumer Staples":       ["Consumer Staples", "Consumer Defensive"],
+    "Healthcare":             ["Healthcare", "Health Care"],
+    "Communication Services": ["Communication Services"],
+    "Energy":                 ["Energy"],
+    "Materials":              ["Materials", "Basic Materials"],
+    "Industrials":            ["Industrials"],
+    "Real Estate":            ["Real Estate"],
+    "Utilities":              ["Utilities"],
+}
+
 st.set_page_config(page_title="Screener", page_icon="📊", layout="wide")
 st.title("📊 Multi-factor Equity Screener")
 
@@ -66,6 +81,14 @@ if fundamentals.empty:
     st.error("No fundamental data available. Check your internet connection.")
     st.stop()
 
+# Apply sector filter using yfinance sector names (post-fetch)
+if sectors:
+    allowed_sectors = {s for ui in sectors for s in _SECTOR_ALIASES.get(ui, [ui])}
+    fundamentals = fundamentals[fundamentals["sector"].isin(allowed_sectors)]
+    if fundamentals.empty:
+        st.warning(f"No stocks found for sectors: {', '.join(sectors)}. Try different filters.")
+        st.stop()
+
 # Indiquer si les données viennent du cache ou sont fraîches
 cached_files = list(CACHE_DIR.glob("*.parquet")) if CACHE_DIR.exists() else []
 cache_dates  = [datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc)
@@ -100,12 +123,16 @@ if include_sentiment:
         method_str = " · ".join(f"{k}: {v}" for k, v in methods.items())
         sentiment_info = f"🧠 Sentiment methods used — {method_str}"
 
-import screener.scoring as sc_mod
-sc_mod.WEIGHTS.update({"value": w_value, "quality": w_quality,
-                        "momentum": w_momentum, "revision": w_revision})
+WEIGHTS.update({"value": w_value, "quality": w_quality,
+                "momentum": w_momentum, "revision": w_revision})
 
 with st.spinner("Computing composite scores..."):
     scored = composite_score(fundamentals, prices, sentiment_df)
+
+momentum_available = "momentum_score" in scored.columns
+if not momentum_available:
+    st.info("ℹ️ Momentum score unavailable (price data blocked on cloud). "
+            "Composite score uses Value · Quality · Revision only.")
 
 top = scored.head(top_n).copy()
 
