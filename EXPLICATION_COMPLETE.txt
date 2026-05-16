@@ -1,0 +1,1208 @@
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║         EUROPEAN EQUITY SCREENER — EXPLICATION COMPLÈTE DE A À Z               ║
+║         Developed by Oswald Jaures KOFFI                                        ║
+║         Théorie financière + code Python expliqués pour débutants               ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TABLE DES MATIÈRES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1.  C'est quoi ce projet en une phrase ?
+2.  L'univers d'investissement — "dans quelles actions on peut investir ?"
+3.  Les données financières — "comment on récupère les chiffres ?"
+4.  Le cache Parquet — "comment on évite de retélécharger ?"
+5.  Le scoring multi-facteurs — "comment on note chaque action ?"
+    5a. Le Z-score — "comment on compare des choses d'unités différentes ?"
+    5b. Le facteur VALUE — "est-ce que l'action est bon marché ?"
+    5c. Le facteur QUALITY — "est-ce que l'entreprise est bien gérée ?"
+    5d. Le facteur MOMENTUM — "est-ce que l'action monte depuis un moment ?"
+    5e. Le facteur REVISION — "est-ce que les analystes révisent leurs prévisions ?"
+    5f. Le score composite — "comment on assemble tout ça ?"
+6.  Le sentiment NLP (FinBERT) — "ce que les journaux disent de l'action"
+7.  L'optimisation de portefeuille — 4 modèles professionnels
+    7a. La diversification — "ne pas mettre tous ses oeufs dans le même panier"
+    7b. Le rendement attendu et la volatilité
+    7c. La frontière efficiente
+    7d. Le ratio de Sharpe — "combien je gagne par unité de risque ?"
+    7e. Modele 1 : Max Sharpe (Markowitz classique)
+    7f. Modele 2 : Min Variance (Markowitz défensif)
+    7g. Modele 3 : Ledoit-Wolf — "une covariance plus stable"
+    7h. Modele 4 : Black-Litterman — "intégrer les vues des analystes"
+    7i. Modele 5 : Risk Parity — "chaque action contribue autant au risque"
+    7j. Comparaison des 4 modeles et quand utiliser lequel
+    7k. Les contraintes — "règles à respecter"
+8.  Le backtesting — "tester sur le passé avant d'investir"
+    8a. Le walk-forward — "simuler comme si c'était vrai"
+    8b. Les métriques de performance
+        - CAGR (taux de croissance annuel)
+        - Sharpe Ratio
+        - Sortino Ratio
+        - Calmar Ratio
+        - Max Drawdown
+        - Alpha et Beta
+        - Information Ratio
+        - VaR (Value at Risk)
+9.  L'interface Streamlit — "comment l'écran fonctionne"
+10. Résumé du flux complet de A à Z
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+══════════════════════════════════════════════════════════════════════════════════
+1. C'EST QUOI CE PROJET EN UNE PHRASE ?
+══════════════════════════════════════════════════════════════════════════════════
+
+C'est un programme qui :
+  → Regarde ~600 grandes entreprises européennes cotées en bourse
+  → Les note de 0 à 100 selon 4 critères financiers + l'actualité
+  → Construit automatiquement un portefeuille optimal via 4 modèles professionnels
+  → Teste si ce portefeuille aurait bien marché dans le passé
+
+Imagine que tu as 10 000 € à investir. Ce programme te dit :
+"Parmi toutes les grandes entreprises d'Europe, voici les meilleures,
+et voici comment répartir ton argent entre elles pour maximiser ton gain
+tout en limitant le risque — selon 4 approches différentes utilisées
+par les gérants de fonds professionnels (BNP Paribas, Amundi, etc.)."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+══════════════════════════════════════════════════════════════════════════════════
+2. L'UNIVERS D'INVESTISSEMENT
+   Fichier : screener/universe.py
+══════════════════════════════════════════════════════════════════════════════════
+
+THÉORIE :
+  L'univers d'investissement, c'est simplement la LISTE des actions que l'on
+  accepte d'acheter. On ne peut pas analyser 50 000 entreprises mondiales,
+  donc on définit des règles de départ pour filtrer.
+
+  Notre univers = Euro Stoxx 600 = les 600 plus grandes entreprises d'Europe
+  cotées en euros, dans les pays : France, Allemagne, Pays-Bas, Italie,
+  Espagne, Belgique, Suisse, etc.
+
+  On ajoute un filtre supplémentaire :
+  - Capitalisation boursière > 500 millions €
+    (la capitalisation = prix de l'action × nombre d'actions = taille de l'entreprise)
+    On exclut les petites sociétés car elles sont moins liquides
+    (= difficiles à acheter et vendre sans faire bouger le prix)
+
+EXEMPLES CONCRETS :
+  OK  LVMH (MC.PA)       → 350 milliards €, acceptée
+  OK  ASML (ASML.AS)     → 300 milliards €, acceptée
+  NON Une startup de 50M€ → trop petite, rejetée
+
+CODE (universe.py) :
+  La fonction get_universe() utilise la bibliothèque "financedatabase"
+  pour récupérer la liste de toutes les actions européennes avec leurs
+  métadonnées (pays, secteur, capitalisation).
+
+  Si financedatabase n'est pas disponible, on utilise une liste
+  de 40 "blue chips" (grandes valeurs de référence) codée en dur.
+
+  "blue chips" = les actions les plus solides et connues
+  Exemple : LVMH, TotalEnergies, Airbus, ASML, SAP, Siemens...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+══════════════════════════════════════════════════════════════════════════════════
+3. LES DONNÉES FINANCIÈRES
+   Fichier : screener/data.py
+══════════════════════════════════════════════════════════════════════════════════
+
+DEUX TYPES DE DONNÉES :
+
+A) DONNÉES DE PRIX (OHLCV)
+   Fonction : fetch_ohlcv()
+
+   OHLCV = Open, High, Low, Close, Volume = les 5 données d'une journée de bourse
+   - Open  = prix d'ouverture (le matin à 9h)
+   - High  = prix le plus haut de la journée
+   - Low   = prix le plus bas de la journée
+   - Close = prix de clôture (le soir à 17h30)
+   - Volume= nombre d'actions échangées dans la journée
+
+   Exemple LVMH le 10 janvier 2024 :
+   Open=750€, High=758€, Low=748€, Close=755€, Volume=200 000 actions
+
+   On télécharge 3 ans de données pour chaque action via "yfinance"
+   (yfinance = une bibliothèque Python qui lit gratuitement les données Yahoo Finance)
+
+   On utilise surtout le "Close" (prix de clôture) pour calculer les rendements.
+
+B) DONNÉES FONDAMENTALES
+   Fonction : fetch_fundamentals()
+
+   Ce sont les données comptables et financières de l'entreprise :
+
+   - pe_ratio (Price/Earnings = PER) :
+     Exemple : PER de 20 signifie que tu paies 20 fois les bénéfices annuels.
+     Si l'entreprise gagne 5€ par action, le cours est à 100€ (20 × 5).
+     Un PER bas = action pas chère. Un PER élevé = action chère.
+
+   - ev_ebit (Enterprise Value / EBIT) :
+     EV = valeur totale de l'entreprise (capitalisation + dettes - trésorerie)
+     EBIT = bénéfice avant intérêts et impôts (le "vrai" bénéfice opérationnel)
+     EV/EBIT de 10 = tu paies 10 fois le bénéfice opérationnel. Plus c'est bas, moins c'est cher.
+
+   - roe (Return On Equity = Rentabilité des Capitaux Propres) :
+     ROE = Bénéfice net / Capitaux propres
+     Exemple : ROE de 20% = pour chaque 100€ investis par les actionnaires,
+     l'entreprise génère 20€ de profit. Un ROE élevé = entreprise bien gérée.
+
+   - roce (Return On Capital Employed) :
+     Comme le ROE mais on inclut aussi les dettes dans le capital.
+     Mesure l'efficacité globale de l'utilisation du capital.
+
+   - net_margin (Marge nette) :
+     Marge nette = Bénéfice net / Chiffre d'affaires
+     Exemple : marge de 15% = pour 100€ de ventes, l'entreprise garde 15€ de profit.
+
+   - debt_to_ebitda (Dette / EBITDA) :
+     Mesure l'endettement. Si une entreprise a 100M€ de dette et 20M€ d'EBITDA,
+     son ratio est 5 = il lui faut 5 ans pour rembourser sa dette. Plus c'est bas, mieux c'est.
+
+   - revenue_growth : croissance du chiffre d'affaires
+   - earnings_growth : croissance des bénéfices
+   - dividend_yield : dividende / prix = rendement du dividende (ex: 3% = 3€ de dividende pour une action à 100€)
+   - beta : sensibilité aux mouvements du marché (expliqué section 8)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+══════════════════════════════════════════════════════════════════════════════════
+4. LE CACHE PARQUET
+   Fichier : screener/data.py — dossier data/cache/
+══════════════════════════════════════════════════════════════════════════════════
+
+PROBLÈME :
+  Télécharger les données fondamentales de 600 actions prend du temps
+  (environ 30 secondes à 2 minutes selon la connexion).
+  Si on recharge l'appli, on ne veut pas tout retélécharger.
+
+SOLUTION : le cache Parquet
+  Parquet = un format de fichier très efficace pour stocker des tableaux de données.
+  Après le premier téléchargement, on sauvegarde les données dans un fichier .parquet.
+  La prochaine fois, on relit le fichier au lieu de retélécharger.
+
+  Exemple :
+  Première fois : on télécharge LVMH → on sauvegarde "MC.PA.parquet"
+  Deuxième fois : on lit "MC.PA.parquet" directement → 100x plus rapide
+
+CODE :
+  cache_path = CACHE_DIR / f"{ticker}.parquet"
+  if cache_path.exists():           → si le fichier existe déjà
+      records.append(pd.read_parquet(cache_path))   → on le lit
+      continue                      → on passe au suivant sans télécharger
+  info = yf.Ticker(ticker).info     → sinon on télécharge
+  df_row.to_parquet(cache_path)     → et on sauvegarde pour la prochaine fois
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+══════════════════════════════════════════════════════════════════════════════════
+5. LE SCORING MULTI-FACTEURS
+   Fichier : screener/scoring.py
+══════════════════════════════════════════════════════════════════════════════════
+
+PRINCIPE GÉNÉRAL :
+  On veut noter chaque action de 0 à 100.
+  Problème : les indicateurs n'ont pas les mêmes unités.
+  Le PER se mesure en "fois" (ex: 20x), le ROE en % (ex: 15%).
+  On ne peut pas additionner des pommes et des oranges directement.
+
+  Solution en 3 étapes :
+  1. Normaliser chaque indicateur avec le Z-score
+  2. Calculer un score par "facteur" (Value, Quality, Momentum, Revision)
+  3. Combiner les facteurs avec des poids → score composite
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5a. LE Z-SCORE — normaliser pour comparer
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FORMULE : Z = (valeur - moyenne) / écart-type
+
+EXEMPLE CONCRET :
+  Imagine les PER de 5 actions : 10, 15, 20, 25, 30
+  Moyenne = 20, Écart-type ≈ 7.9
+
+  Action A (PER=10) : Z = (10-20)/7.9 = -1.27  → très en dessous de la moyenne
+  Action C (PER=20) : Z = (20-20)/7.9 =  0.00  → exactement dans la moyenne
+  Action E (PER=30) : Z = (30-20)/7.9 = +1.27  → très au-dessus de la moyenne
+
+  Le Z-score dit "de combien d'écarts-types cette valeur est-elle éloignée de la moyenne ?"
+
+  Après normalisation, toutes les séries ont la même échelle :
+  - Moyenne = 0
+  - Écart-type = 1
+  Maintenant on peut additionner des PER et des ROE !
+
+CODE :
+  def _zscore(series):
+      return (series - series.mean()) / series.std()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5b. FACTEUR VALUE (poids : 30%)
+    "Est-ce que l'action est bon marché par rapport à ce qu'elle vaut vraiment ?"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THÉORIE :
+  L'investissement Value (valeur), popularisé par Benjamin Graham et Warren Buffett,
+  consiste à acheter des actions qui valent plus que leur prix de marché.
+
+  On cherche des entreprises "bon marché" = faible PER, faible EV/EBIT.
+
+  ATTENTION : on INVERSE les ratios (on prend 1/PER et 1/EV_EBIT)
+  car un PER BAS est MEILLEUR. En inversant, un PER bas donne un grand nombre,
+  donc un Z-score élevé = bon score.
+
+  Exemple :
+  Action A : PER=10 → 1/10 = 0.10 → Z-score élevé → bon score Value
+  Action B : PER=30 → 1/30 = 0.033 → Z-score faible → mauvais score Value
+
+CODE :
+  def compute_value_score(df):
+      pe_inv = zscore(1.0 / df["pe_ratio"].clip(lower=0.1))   # 1/PER
+      ev_inv = zscore(1.0 / df["ev_ebit"].clip(lower=0.1))    # 1/EV-EBIT
+      return (pe_inv + ev_inv) / 2                             # moyenne des deux
+
+  Note : .clip(lower=0.1) évite la division par zéro si PER=0 ou négatif.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5c. FACTEUR QUALITY (poids : 30%)
+    "Est-ce que l'entreprise est bien gérée et génère beaucoup de profit ?"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THÉORIE :
+  Une entreprise de qualité est une entreprise qui :
+  - Génère beaucoup de profit pour ses actionnaires (ROE élevé)
+  - Garde beaucoup d'argent sur chaque euro vendu (marge nette élevée)
+  - Utilise bien son capital total (ROCE élevé)
+
+  Contrairement au facteur Value où on inverse, ici plus c'est GRAND, mieux c'est.
+  Un ROE de 25% est meilleur qu'un ROE de 5%.
+
+  Exemple concret :
+  LVMH : ROE ≈ 22%, Marge nette ≈ 17% → Score Quality élevé
+  Entreprise en difficulté : ROE ≈ 3%, Marge nette ≈ 1% → Score Quality faible
+
+CODE :
+  def compute_quality_score(df):
+      roe    = zscore(df["roe"])         # rentabilité des capitaux propres
+      margin = zscore(df["net_margin"])  # marge nette
+      roce   = zscore(df["roce"])        # rentabilité du capital total
+      return (roe + margin + roce) / 3   # moyenne des trois
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5d. FACTEUR MOMENTUM (poids : 25%)
+    "Est-ce que l'action monte depuis plusieurs mois ?"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THÉORIE :
+  Le momentum est l'un des phénomènes les plus documentés en finance :
+  "les actions qui ont monté continuent souvent à monter à court terme".
+
+  C'est contre-intuitif mais ça marche ! Pourquoi ?
+  - Les bonnes nouvelles arrivent progressivement (les investisseurs réagissent lentement)
+  - Les fonds institutionnels achètent les "gagnants" (effets de tendance)
+  - Psychologie : les gens préfèrent acheter ce qui monte
+
+  On calcule le rendement sur 3 horizons différents :
+  - 3 mois (63 jours de bourse) → court terme
+  - 6 mois (126 jours)          → moyen terme
+  - 12 mois (252 jours)         → long terme
+
+  On pondère plus le court terme (40%) que le long terme (30%) car le signal
+  à très long terme peut s'inverser (effet "reversion à la moyenne").
+
+  RENDEMENT = somme des log-rendements
+  Log-rendement journalier = ln(Prix_aujourd'hui / Prix_hier)
+  Exemple : si l'action passe de 100€ à 101€, le log-rendement = ln(101/100) = 0.99%
+
+CODE :
+  def compute_momentum_score(prices):
+      log_returns = np.log(prices / prices.shift(1)).dropna()   # log-rendements journaliers
+      r3m  = zscore(log_returns.iloc[-63:].sum())   # somme sur 3 mois
+      r6m  = zscore(log_returns.iloc[-126:].sum())  # somme sur 6 mois
+      r12m = zscore(log_returns.iloc[-252:].sum())  # somme sur 12 mois
+      return 0.4*r3m + 0.3*r6m + 0.3*r12m           # pondération
+
+  prices.shift(1) = décale d'une ligne = prix d'hier
+  .iloc[-63:] = garde seulement les 63 dernières lignes (= 3 derniers mois)
+  .sum() = additionne tous les rendements = rendement total sur la période
+
+  NOTE : sur HuggingFace Spaces, les serveurs cloud sont souvent bloqués par Yahoo
+  Finance et stooq pour les données de prix. Si moins de 50% des actions ont des
+  prix disponibles, le facteur momentum est automatiquement exclu du score composite
+  et les poids des autres facteurs sont renormalisés pour compenser.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5e. FACTEUR REVISION (poids : 15%)
+    "Est-ce que les chiffres s'améliorent ?"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THÉORIE :
+  Les "révisions" en finance désignent les changements de prévisions des analystes.
+  Quand un analyste de Goldman Sachs relève ses prévisions de bénéfices pour LVMH,
+  c'est un signe positif = d'autres investisseurs vont probablement acheter.
+
+  Dans notre implémentation, on utilise :
+  - earnings_growth : croissance réelle des bénéfices (proxy des révisions)
+  - revenue_growth  : croissance du chiffre d'affaires
+
+  Une entreprise dont les bénéfices croissent de 20% est mieux que celle qui stagne à 2%.
+
+CODE :
+  def compute_revision_score(df):
+      eg = zscore(df["earnings_growth"])  # croissance bénéfices
+      rg = zscore(df["revenue_growth"])   # croissance CA
+      return (eg + rg) / 2                # moyenne
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5f. LE SCORE COMPOSITE — assembler les 4 facteurs
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FORMULE :
+  Score brut = 0.30 × Value + 0.30 × Quality + 0.25 × Momentum + 0.15 × Revision
+
+RANG PERCENTILE :
+  On convertit ce score brut en rang percentile de 0 à 100.
+  "Rang percentile" = position relative dans la liste.
+
+  Exemple avec 4 actions :
+  Scores bruts : A=2.1, B=0.5, C=1.8, D=-0.3
+  Rangs        : A=4, B=2, C=3, D=1  (1=le plus bas, 4=le plus haut)
+  Percentiles  : A=100, B=50, C=75, D=25  (sur 100)
+
+  Ainsi l'action avec le meilleur score composite obtient 100/100,
+  la pire obtient 0/100.
+
+CODE :
+  composite = sum(scores[f"{k}_score"] * v for k, v in WEIGHTS.items())
+  # Exemple : 0.30×value_score + 0.30×quality_score + ...
+
+  scores["composite_score"] = (
+      stats.rankdata(composite) / len(composite) * 100
+  ).round(1)
+  # rankdata() assigne un rang à chaque valeur
+  # / len(composite) * 100 → convertit en percentile
+
+  WEIGHTS = {
+      "value":    0.30,   # 30%
+      "quality":  0.30,   # 30%
+      "momentum": 0.25,   # 25%
+      "revision": 0.15,   # 15%
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+══════════════════════════════════════════════════════════════════════════════════
+6. LE SENTIMENT NLP (FinBERT)
+   Fichier : screener/sentiment.py
+══════════════════════════════════════════════════════════════════════════════════
+
+C'EST QUOI LE NLP ?
+  NLP = Natural Language Processing = traitement du langage naturel
+  C'est la capacité d'un ordinateur à "comprendre" du texte humain.
+
+C'EST QUOI BERT ?
+  BERT (Bidirectional Encoder Representations from Transformers) est un modèle
+  d'intelligence artificielle développé par Google en 2018.
+  Il a été entraîné sur des milliards de pages web pour comprendre le sens des mots.
+
+C'EST QUOI FINBERT ?
+  FinBERT est une version de BERT spécialement entraînée sur des textes financiers :
+  - Articles Reuters sur les marchés
+  - Rapports annuels (10-K, SEC filings)
+  - Transcriptions d'appels de résultats (earnings calls)
+
+  FinBERT peut classer une phrase en 3 catégories :
+  - "positive" (bullish = bon pour l'action)
+  - "negative" (bearish = mauvais pour l'action)
+  - "neutral"  (neutre)
+
+EXEMPLE :
+  Phrase : "LVMH reports record profits driven by strong Asian demand"
+  FinBERT → positive: 0.92, negative: 0.04, neutral: 0.04
+  Score net = 0.92 - 0.04 = +0.88 → très bullish !
+
+  Phrase : "Airbus faces supply chain disruptions, lowers guidance"
+  FinBERT → positive: 0.05, negative: 0.89, neutral: 0.06
+  Score net = 0.05 - 0.89 = -0.84 → très bearish !
+
+COMMENT ON L'UTILISE :
+  1. On récupère les 10 dernières nouvelles de chaque action via yfinance
+  2. On passe chaque titre + résumé dans FinBERT
+  3. On calcule le score net moyen = moyenne(positive - negative)
+  4. Score > +0.1 → "bullish", Score < -0.1 → "bearish", sinon "neutral"
+
+CODE :
+  results = _pipe(texts)              # FinBERT analyse tous les textes
+  for r in results:
+      scores = {x["label"]: x["score"] for x in r}  # ex: {"positive":0.8, "negative":0.1, "neutral":0.1}
+      net = scores["positive"] - scores["negative"]  # score net
+      net_scores.append(net)
+  avg = sum(net_scores) / len(net_scores)            # moyenne sur les 10 news
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+══════════════════════════════════════════════════════════════════════════════════
+7. L'OPTIMISATION DE PORTEFEUILLE — 4 MODÈLES PROFESSIONNELS
+   Fichier : optimizer/markowitz.py
+══════════════════════════════════════════════════════════════════════════════════
+
+Ce module implémente 4 modèles d'optimisation utilisés dans les salles de marchés
+professionnelles (BNP Paribas, Amundi, Natixis...).
+Chaque modèle répond à une question différente et s'adapte à un contexte différent.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7a. LA DIVERSIFICATION — "ne pas mettre tous ses oeufs dans le même panier"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EXEMPLE INTUITIF :
+  Si tu mets 100% dans LVMH et LVMH chute de -40%, tu perds 40%.
+  Si tu mets 50% dans LVMH et 50% dans SAP (une entreprise tech allemande),
+  et que LVMH chute de -40% mais SAP monte de +20%,
+  tu perds seulement : 0.5×(-40%) + 0.5×(+20%) = -10% au lieu de -40% !
+
+  C'est la magie de la diversification : en combinant des actions qui ne bougent
+  pas exactement pareil, on réduit le risque global.
+
+CONCEPT CLÉ : LA CORRÉLATION
+  La corrélation mesure à quel point deux actions bougent ensemble.
+  - Corrélation = +1 : les deux montent et baissent exactement pareil (aucune diversification)
+  - Corrélation = 0  : indépendantes (bonne diversification)
+  - Corrélation = -1 : quand l'une monte, l'autre baisse (diversification parfaite)
+
+  Exemple : Total (pétrole) et Air Liquide (gaz) sont très corrélés.
+            Total (pétrole) et ASML (semi-conducteurs) sont peu corrélés.
+            → Mélanger des secteurs différents diversifie mieux !
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7b. LE RENDEMENT ATTENDU ET LA VOLATILITÉ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RENDEMENT ATTENDU (mu) :
+  C'est le gain moyen annuel qu'on s'attend à obtenir.
+  On l'estime à partir des rendements historiques.
+
+  Si LVMH a monté en moyenne de +8% par an sur les 3 dernières années,
+  mu (LVMH) = 8% par an.
+
+  En portefeuille, le rendement attendu = somme pondérée des rendements :
+  Si 60% LVMH (+8%) et 40% SAP (+12%) :
+  Rendement attendu = 0.60×8% + 0.40×12% = 4.8% + 4.8% = 9.6%
+
+VOLATILITÉ (sigma) :
+  C'est la mesure du risque. C'est l'écart-type des rendements.
+  Une volatilité de 15% signifie que le rendement annuel fluctue en général
+  de ±15% autour de la moyenne.
+
+  Action stable (Nestlé) : volatilité ≈ 10%
+  Action cyclique (BMW)  : volatilité ≈ 25%
+  Crypto Bitcoin         : volatilité ≈ 80%
+
+  En portefeuille, la volatilité n'est PAS une simple moyenne pondérée.
+  Elle dépend aussi des corrélations entre les actions :
+
+  sigma_portefeuille = sqrt( w^T × Cov × w )
+
+  Où Cov est la matrice de covariance (qui contient toutes les corrélations paire à paire).
+
+CODE (compute_cov_matrix) :
+  log_ret = np.log(prices / prices.shift(1)).dropna()  # rendements journaliers
+  mu  = log_ret.mean().values * 252    # rendement annualisé (252 jours de bourse/an)
+  cov = log_ret.cov().values * 252     # matrice de covariance annualisée
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7c. LA FRONTIÈRE EFFICIENTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+INTUITION :
+  Imagine un graphique avec :
+  - l'axe horizontal = risque (volatilité) en %
+  - l'axe vertical   = rendement attendu en %
+
+  Chaque point représente un portefeuille possible.
+  Il y a une infinité de combinaisons possibles.
+
+  La FRONTIÈRE EFFICIENTE est la courbe qui représente les MEILLEURS portefeuilles :
+  pour un niveau de risque donné, c'est le portefeuille qui donne le rendement maximum.
+  (ou : pour un rendement donné, c'est celui qui a le risque minimum)
+
+  Tout portefeuille sous la frontière est "sous-optimal" :
+  on peut faire mieux avec le même niveau de risque.
+
+  Cette théorie a été développée par Harry Markowitz en 1952.
+  Il a gagné le Prix Nobel d'économie en 1990 pour ça.
+
+  Sur le graphique de notre optimizer, on trace la frontière et on y place
+  les 4 modèles sous forme de points colorés pour les comparer visuellement.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7d. LE RATIO DE SHARPE
+    "Combien est-ce que je gagne PAR UNITÉ de risque pris ?"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FORMULE :
+  Sharpe = (Rendement du portefeuille - Taux sans risque) / Volatilité
+
+  Taux sans risque = rendement d'un placement garanti (ex: obligations d'État).
+
+EXEMPLE :
+  Portefeuille A : Rendement=10%, Volatilité=15%, Taux sans risque=3%
+  Sharpe A = (10% - 3%) / 15% = 0.47
+
+  Portefeuille B : Rendement=8%, Volatilité=8%, Taux sans risque=3%
+  Sharpe B = (8% - 3%) / 8% = 0.625
+
+  B est MEILLEUR que A malgré un rendement plus faible,
+  car il prend beaucoup moins de risque pour chaque euro de gain.
+
+  Règle de lecture :
+  Sharpe < 0   : le portefeuille perd de l'argent ajusté du risque
+  Sharpe 0-0.5 : médiocre
+  Sharpe 0.5-1 : acceptable
+  Sharpe 1-2   : excellent
+  Sharpe > 2   : exceptionnel (rare)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7e. MODÈLE 1 : MAX SHARPE (Markowitz classique)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRINCIPE :
+  On cherche les poids qui maximisent le ratio de Sharpe.
+  C'est le portefeuille "le plus efficace" en termes de rendement par unité de risque.
+
+  Mathématiquement : max_w [ (w^T × mu - rf) / sqrt(w^T × Cov × w) ]
+
+  On utilise scipy.optimize.minimize() avec method='SLSQP'
+  (Sequential Least Squares Programming = algorithme d'optimisation sous contraintes).
+
+QUAND L'UTILISER :
+  Quand on veut maximiser le rendement ajusté du risque.
+  Idéal pour des mandats de type "croissance".
+  C'est le choix par défaut dans la plupart des fonds.
+
+LIMITES :
+  Très sensible aux estimations de rendement (mu).
+  Si mu est mal estimé, les poids peuvent être très concentrés.
+
+CODE :
+  def max_sharpe(mu, cov, tickers, rf=0.03):
+      result = minimize(
+          lambda w: -(w @ mu - rf) / max(sqrt(w @ cov @ w), 1e-9),
+          x0=np.ones(n)/n,
+          method="SLSQP",
+          bounds=[(0.01, 0.10)] * n,
+          constraints=[{"type": "eq", "fun": lambda w: sum(w) - 1}]
+      )
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7f. MODÈLE 2 : MIN VARIANCE (Markowitz défensif)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRINCIPE :
+  On cherche les poids qui minimisent la variance (risque total) du portefeuille,
+  sans tenir compte du rendement attendu.
+
+  Mathématiquement : min_w [ w^T × Cov × w ]
+
+QUAND L'UTILISER :
+  En période de crise ou d'incertitude élevée.
+  Pour des mandats de type "préservation du capital".
+  Quand on n'a pas confiance dans les prévisions de rendement.
+
+CODE :
+  def min_variance(mu, cov, tickers):
+      result = minimize(
+          lambda w: float(w @ cov @ w),
+          x0=np.ones(n)/n,
+          method="SLSQP",
+          bounds=[(0.01, 0.10)] * n,
+          constraints=[{"type": "eq", "fun": lambda w: sum(w) - 1}]
+      )
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7g. LEDOIT-WOLF — une covariance plus stable (option activable sur tous les modèles)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PROBLÈME DE LA COVARIANCE HISTORIQUE :
+  La matrice de covariance historique est "bruyante" quand on a peu d'observations
+  par rapport au nombre d'actifs.
+
+  Exemple : 16 actions × 3 ans = 750 observations.
+  C'est suffisant, mais les estimations restent imprécises.
+  Le problème s'aggrave si on a 100 actions et seulement 2 ans de données.
+
+  En pratique, cela entraîne :
+  - Des poids très concentrés sur quelques actifs
+  - Une instabilité des poids d'un rééquilibrage à l'autre
+  - De mauvaises performances hors-échantillon (le portefeuille ne marche pas en live)
+
+LA SOLUTION LEDOIT-WOLF :
+  Proposé par Olivier Ledoit et Michael Wolf (2004), prix d'académie en finance.
+  L'idée : "rétrécir" (shrink) la matrice de covariance vers une cible plus stable.
+
+  On fait une combinaison convexe entre :
+  - La covariance historique (bruyante mais précise en moyenne)
+  - Une matrice cible simple : l'identité scalée (qui suppose que tout est indépendant)
+
+  Cov_LW = alpha × Cov_historique + (1 - alpha) × Cov_cible
+
+  Le coefficient alpha est calculé analytiquement (pas d'essai-erreur).
+  Il minimise l'erreur quadratique moyenne de l'estimateur.
+
+  Résultat : une matrice plus stable, de meilleure qualité pour l'optimisation.
+
+EXEMPLE INTUITIF :
+  Sans LW : la covariance dit "LVMH et SAP sont corrélées à 0.85" (bruit statistique)
+  Avec LW  : la covariance dit "LVMH et SAP sont corrélées à 0.62" (plus crédible)
+
+QUAND L'UTILISER :
+  Pratiquement TOUJOURS en situation réelle.
+  Les gérants professionnels utilisent systématiquement le shrinkage.
+  C'est l'option activée par défaut dans notre optimizer.
+
+CODE :
+  from sklearn.covariance import LedoitWolf
+
+  def ledoit_wolf_cov(prices, annualise=True):
+      log_ret = np.log(prices / prices.shift(1)).dropna()
+      lw = LedoitWolf().fit(log_ret.values)    # estimation analytique
+      mu  = log_ret.mean().values * 252
+      cov = lw.covariance_ * 252               # covariance rétrécie annualisée
+      return mu, cov
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7h. MODÈLE 3 : BLACK-LITTERMAN — intégrer les vues des analystes
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ORIGINE :
+  Développé par Fischer Black et Robert Litterman chez Goldman Sachs en 1990.
+  C'est LE modèle de référence dans les grandes banques d'investissement.
+
+PROBLÈME QU'IL RÉSOUT :
+  Le modèle Markowitz classique utilise les rendements historiques comme prévisions.
+  Problème : "parce que ça a bien marché dans le passé" n'est pas une bonne raison
+  d'acheter une action. Les vrais gérants ont des opinions sur l'avenir.
+
+  Black-Litterman permet de combiner :
+  1. Un "prior" (point de départ) basé sur l'équilibre du marché
+  2. Des "vues" de l'analyste (ses prédictions sur certains actifs)
+
+ÉTAPE 1 : LE PRIOR (rendements d'équilibre)
+  Idée clé : si le marché est efficient, les prix actuels reflètent un équilibre.
+  On peut calculer les rendements "implicites" que le marché anticipe via une
+  "reverse optimisation" du CAPM.
+
+  Si le marché valorise LVMH à 350 milliards €, c'est que les investisseurs
+  estiment collectivement un certain rendement futur. On le calcule ainsi :
+
+  pi (rendement d'équilibre) = delta × Cov × w_marché
+
+  Où :
+  - delta = coefficient d'aversion au risque (typiquement 2.5)
+  - w_marché = poids de capitalisation de chaque action dans l'univers
+  - pi = rendement attendu "implicite" (ce que le marché "pense")
+
+ÉTAPE 2 : LES VUES DE L'ANALYSTE
+  L'analyste ajoute ses propres prévisions :
+  "Je pense que LVMH va faire +12% l'an prochain."
+  "Je pense que SAP va surperformer ASML de 5%."
+
+  Mathématiquement : P × mu = q
+  Où P est la matrice "pick" (qui actif est concerné) et q le rendement prévu.
+
+ÉTAPE 3 : LA MISE À JOUR BAYÉSIENNE
+  On combine le prior (marché) et les vues (analyste) via le théorème de Bayes.
+
+  Plus formellement :
+  mu_BL = [ (tau × Cov)^-1 + P^T × Omega^-1 × P ]^-1
+          × [ (tau × Cov)^-1 × pi + P^T × Omega^-1 × q ]
+
+  Omega = matrice d'incertitude sur les vues (plus on est sûr d'une vue, plus Omega est petit)
+
+  Résultat : mu_BL est un "compromis" entre le marché et les vues.
+
+EXEMPLE NUMÉRIQUE :
+  Prior (marché) : LVMH → rendement implicite 7%
+  Vue analyste   : LVMH → "je prévois 12%"
+  mu_BL résultant : environ 9.5% (entre les deux, pondéré par la confiance)
+
+  Si Omega est grand (analyste peu sûr) : mu_BL reste proche du prior (7%)
+  Si Omega est petit (analyste très sûr) : mu_BL se rapproche de la vue (12%)
+
+SANS VUES :
+  Si l'utilisateur n'entre aucune vue dans le sidebar, Black-Litterman renvoie
+  simplement les rendements d'équilibre du marché (pi).
+  C'est une allocation "neutre" par rapport au consensus de marché.
+
+QUAND L'UTILISER :
+  Quand les gérants de portefeuille ont des convictions sur certains titres.
+  Pour intégrer les recommandations d'analystes de manière rigoureuse.
+  Pour éviter que le portefeuille soit dominé par quelques valeurs.
+
+CODE :
+  def black_litterman(cov, tickers, market_weights=None, delta=2.5, tau=0.05, views=None):
+      pi = delta * cov @ market_weights         # rendements d'équilibre
+      # si pas de vues, on retourne directement pi
+      # sinon on applique la mise à jour bayésienne
+      omega = tau * P @ cov @ P.T              # incertitude proportionnelle à la covariance
+      M = inv(inv(tau * cov) + P.T @ inv(omega) @ P)
+      mu_bl = M @ (inv(tau * cov) @ pi + P.T @ inv(omega) @ q)
+      return mu_bl, cov + M
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7i. MODÈLE 4 : RISK PARITY — chaque action contribue autant au risque total
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ORIGINE :
+  Popularisé par Ray Dalio (Bridgewater Associates, le plus grand hedge fund au monde)
+  sous le nom "All Weather Portfolio". Devenu un standard dans les fonds de pension.
+
+PRINCIPE FONDAMENTAL :
+  Dans un portefeuille Markowitz classique, les actions à forte volatilité dominent
+  le risque total même si leur poids en € est modeste.
+
+  Exemple : si on met 50% en obligations (faible vol) et 50% en actions (forte vol),
+  les actions représentent en réalité 90% du risque total du portefeuille !
+  Ce n'est pas vraiment "50/50".
+
+  Risk Parity dit : chaque actif doit contribuer ÉGALEMENT au risque total.
+
+  Si on a 16 actions, chacune doit contribuer 1/16 = 6.25% du risque total.
+
+DÉFINITION : LA CONTRIBUTION AU RISQUE (RC)
+  La contribution au risque d'un actif i est :
+  RC_i = w_i × (Cov × w)_i / sigma_portefeuille
+
+  Où sigma_portefeuille = sqrt(w^T × Cov × w)
+
+  La contribution de chaque actif au risque total dépend de :
+  - Son poids w_i
+  - Sa covariance avec les autres actifs
+
+OPTIMISATION :
+  On cherche les poids qui minimisent la variance des contributions au risque :
+
+  min_w [ somme( (RC_i - RC_cible)² ) ]
+  avec RC_cible = sigma_portefeuille / n
+
+  Résultat : les poids de Risk Parity sont différents des poids Markowitz.
+  Les actions peu volatiles et peu corrélées reçoivent des poids plus élevés.
+  Les actions très volatiles reçoivent des poids plus faibles.
+
+AVANTAGES MAJEURS :
+  - Ne dépend pas des prévisions de rendement (mu) → moins sensible aux erreurs
+  - Portefeuille naturellement diversifié
+  - Très stable d'un rééquilibrage à l'autre
+  - Résistant aux crises : quand une classe d'actif chute, elle ne "domine" pas le risque
+
+EXEMPLE NUMÉRIQUE :
+  Action A : vol=10%, Action B : vol=20%
+  Markowitz Max Sharpe pourrait donner : A=30%, B=70%
+  Risk Parity donnera environ : A=67%, B=33%
+  (l'action peu volatile reçoit plus de poids pour que les contributions soient égales)
+
+GRAPHIQUE DANS L'OPTIMIZER :
+  Le tab "Risk Parity" affiche un graphique supplémentaire : les contributions
+  au risque de chaque action. La ligne horizontale pointillée indique la cible
+  d'égalité. En pratique, les contributions sont très proches (mais pas exactes
+  à cause des contraintes de poids min/max).
+
+QUAND L'UTILISER :
+  Pour des fonds de pension ou des profils "patrimoniaux" (préservation du capital).
+  En période d'incertitude sur les rendements futurs.
+  Quand on veut une allocation stable sur le long terme.
+  Quand les gérants ne veulent pas parier sur des prévisions spécifiques.
+
+CODE :
+  def risk_parity(cov, tickers, rf=0.03, mu=None):
+      def _rc(w):
+          sigma = sqrt(w @ cov @ w)
+          return (w * (cov @ w)) / sigma         # contribution de chaque actif
+
+      def _objective(w):
+          rc = _rc(w)
+          target = sum(rc) / n                   # contribution cible = 1/n du risque
+          return sum((rc - target)**2)           # on minimise les écarts à l'égalité
+
+      result = minimize(_objective, x0=ones/n, method="SLSQP", ...)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7j. COMPARAISON DES 4 MODÈLES — quand utiliser lequel ?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Modèle            Besoin de mu ?  Besoin de vues ?  Profil adapté
+  ─────────────────────────────────────────────────────────────────────────────
+  Max Sharpe        OUI             NON              Croissance, mandat agressif
+  Min Variance      NON             NON              Préservation capital, crise
+  Black-Litterman   OUI (équilibre) OPTIONNEL        Conviction analyste, banque
+  Risk Parity       NON             NON              Fonds pension, long terme
+
+  Covariance Ledoit-Wolf : option recommandée pour TOUS les modèles.
+  Elle améliore la qualité de la matrice sans changer l'approche du modèle.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7k. LES CONTRAINTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CONTRAINTE 1 : Poids maximum par action (w_max)
+  Par défaut 10% — on ne met jamais plus de 10% dans une seule action.
+  Pourquoi ? Pour éviter une concentration excessive.
+  Configurable dans le sidebar de l'optimizer (5% à 40%).
+
+CONTRAINTE 2 : Poids minimum par action (w_min)
+  Par défaut 1% — les actions sous ce seuil sont exclues du portefeuille.
+  Évite des positions "symboliques" impossibles à gérer en pratique.
+
+CONTRAINTE 3 : Somme des poids = 100%
+  Le portefeuille est toujours pleinement investi (pas de cash).
+  Mathématiquement : somme(w) = 1
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+══════════════════════════════════════════════════════════════════════════════════
+8. LE BACKTESTING
+   Fichiers : backtest/engine.py + backtest/metrics.py
+══════════════════════════════════════════════════════════════════════════════════
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8a. LE WALK-FORWARD BACKTEST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+POURQUOI BACKTESTER ?
+  Avant d'investir de l'argent réel, on teste si la stratégie aurait fonctionné
+  dans le passé. C'est comme un crash test : on simule avant de mettre en danger.
+
+  ATTENTION : les performances passées ne garantissent pas les performances futures.
+  Mais un backtest permet de vérifier la cohérence et la robustesse de la stratégie.
+
+QU'EST-CE QUE LE "WALK-FORWARD" ?
+  C'est la méthode la plus honnête de backtesting.
+  On simule exactement ce qu'on aurait fait si on avait appliqué la stratégie en temps réel.
+
+  Voici comment ça marche :
+
+  EXEMPLE SUR 3 ANS :
+
+  [Janvier 2021]
+  → On regarde les 252 derniers jours de prix (= 1 an de données, la "fenêtre")
+  → On optimise le portefeuille avec ces données
+  → On investit avec ces poids pour le mois de janvier 2021
+
+  [Février 2021 = rééquilibrage mensuel]
+  → La fenêtre d'analyse avance d'un mois
+  → On réoptimise le portefeuille avec les nouvelles données
+  → On réinvestit avec les nouveaux poids
+
+  ...et ainsi de suite jusqu'à la fin de la période.
+
+  La différence avec un backtest simple :
+  - Simple : on optimise une seule fois avec TOUTES les données → on "voit le futur"
+  - Walk-forward : à chaque rééquilibrage, on n'utilise que les données disponibles
+
+CODE (engine.py) :
+  for date in trading_days:
+      if date >= next_rebalance_date:
+          window = prices.loc[:date].iloc[-lookback_days:]  # fenêtre glissante
+          current_weights = weights_fn(window)               # optimisation sur la fenêtre
+          next_rebalance_date = ...
+
+      day_return = sum(current_weights[t] × daily_return[t] for t in tickers)
+      strategy_returns.append(day_return)
+
+BENCHMARK :
+  On compare notre stratégie à l'Euro Stoxx 50 (EXW1.DE = ETF iShares).
+  L'Euro Stoxx 50 = les 50 plus grandes entreprises de la zone euro.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8b. LES MÉTRIQUES DE PERFORMANCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+--- CAGR (Compound Annual Growth Rate = Taux de Croissance Annuel Composé) ---
+
+FORMULE : CAGR = (NAV_finale / NAV_initiale)^(252/N) - 1
+
+EXEMPLE :
+  On investit 100€ en janvier 2021.
+  En décembre 2023 (3 ans, N=756 jours de bourse), le portefeuille vaut 130€.
+  CAGR = (130/100)^(252/756) - 1 = 1.30^(1/3) - 1 = 9.1% par an
+
+CODE :
+  cagr = (nav.iloc[-1] / nav.iloc[0]) ** (252 / len(nav)) - 1
+
+
+--- SHARPE RATIO ---
+  (Voir section 7d pour l'explication complète)
+  Rappel : (Rendement - Taux sans risque) / Volatilité
+
+
+--- SORTINO RATIO ---
+
+FORMULE : Sortino = (Rendement - Taux sans risque) / Volatilité des rendements NÉGATIFS seulement
+
+DIFFÉRENCE AVEC SHARPE :
+  Sharpe pénalise les DEUX côtés de la volatilité (hausse ET baisse).
+  Sortino pénalise SEULEMENT les mouvements à la baisse.
+
+  Un investisseur ne se plaint pas quand son portefeuille monte trop vite.
+  Sortino est considéré comme une mesure plus réaliste du risque.
+
+CODE :
+  downside = excess[excess < 0].std()  # écart-type des rendements négatifs seulement
+  return excess.mean() / downside * sqrt(252)
+
+
+--- CALMAR RATIO ---
+
+FORMULE : Calmar = CAGR / Max Drawdown
+
+EXEMPLE :
+  CAGR = 10%, Max Drawdown = 20%
+  Calmar = 10% / 20% = 0.5
+
+  Calmar > 1  : excellent
+  Calmar 0.5-1: correct
+  Calmar < 0.5: à améliorer
+
+
+--- MAX DRAWDOWN (Maximum Drawdown = Perte Maximum) ---
+
+DÉFINITION :
+  C'est la plus grande chute depuis un pic jusqu'au creux suivant.
+
+EXEMPLE :
+  Portefeuille à 130€ en mars 2022 (pic)
+  Portefeuille à 95€ en octobre 2022 (creux)
+  Drawdown = (95 - 130) / 130 = -26.9%
+  Max Drawdown = 26.9%
+
+CODE :
+  peak = nav.cummax()
+  drawdown = (nav - peak) / peak
+  max_drawdown = abs(drawdown.min())
+
+
+--- ALPHA et BETA ---
+
+BETA :
+  Sensibilité du portefeuille aux mouvements du marché.
+  Beta = 1.0  : bouge comme le marché
+  Beta = 1.5  : amplifie les mouvements du marché de 50%
+  Beta = 0.5  : moitié moins sensible
+
+  Beta = Covariance(stratégie, benchmark) / Variance(benchmark)
+
+ALPHA :
+  Surperformance du gérant par rapport à ce que le beta prédit.
+  Alpha > 0 : le gérant surperforme → rare et précieux !
+  Alpha = 0 : pas de valeur ajoutée (gestion passive suffisante)
+  Alpha < 0 : le gérant détruit de la valeur
+
+CODE :
+  beta = np.cov(strat, bench)[0,1] / max(np.var(bench), 1e-9)
+  alpha = (strat.mean() - beta * bench.mean()) * 252  # annualisé
+
+
+--- INFORMATION RATIO ---
+
+FORMULE : IR = (Rendement stratégie - Rendement benchmark) / Tracking error
+
+  IR mesure la régularité de la surperformance.
+  IR > 0.5 : bon
+  IR > 1.0 : excellent (très rare)
+
+CODE :
+  diff = strategy_returns - benchmark_returns
+  ir = diff.mean() / diff.std() * sqrt(252)
+
+
+--- VAR 95% (Value at Risk à 95%) ---
+
+DÉFINITION :
+  "Quelle est la perte maximum que je risque en une journée, avec 95% de probabilité ?"
+
+EXEMPLE :
+  VaR 95% = 1.5%
+  → 95% des jours, on perd moins de 1.5%
+  → 5% des jours (≈12 jours/an), on peut perdre plus de 1.5%
+
+CODE :
+  return abs(np.percentile(returns.dropna(), 5))
+
+
+--- LA NAV (Net Asset Value = Valeur Liquidative) ---
+
+  NAV = la valeur du portefeuille indexée à 100 au départ.
+  Si NAV finit à 142 après 3 ans → le portefeuille a gagné 42%.
+
+CODE :
+  nav = (1 + returns).cumprod() * 100
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+══════════════════════════════════════════════════════════════════════════════════
+9. L'INTERFACE STREAMLIT
+   Fichiers : app/main.py + app/pages/
+══════════════════════════════════════════════════════════════════════════════════
+
+STREAMLIT, C'EST QUOI ?
+  Streamlit est une bibliothèque Python qui transforme automatiquement
+  du code Python en site web interactif.
+
+  Sans Streamlit, il faudrait maîtriser HTML, CSS, JavaScript, Flask/Django...
+  Avec Streamlit, on écrit du Python simple et ça devient un beau tableau de bord.
+
+STRUCTURE MULTI-PAGES :
+  Streamlit supporte plusieurs pages dans un dossier "pages/".
+  Chaque fichier = une page. La sidebar affiche automatiquement la navigation.
+
+  Notre structure :
+  app/
+  ├── main.py              → Page d'accueil
+  └── pages/
+      ├── 1_Screener.py    → Page screener
+      ├── 2_Optimizer.py   → Page optimiseur (4 modèles)
+      └── 3_Backtest.py    → Page backtest
+
+  Note : les noms de fichiers n'ont pas d'emojis pour un rendu professionnel.
+  Le préfixe numérique (1_, 2_, 3_) détermine l'ordre d'affichage dans la sidebar.
+
+COMPOSANTS STREAMLIT UTILISÉS :
+  - st.title()              → Grand titre
+  - st.subheader()          → Sous-titre
+  - st.sidebar.header()     → Section dans la sidebar
+  - st.tabs()               → Onglets (utilisé dans l'Optimizer pour les 4 modèles)
+  - st.multiselect()        → Menu à choix multiples
+  - st.slider()             → Curseur
+  - st.number_input()       → Champ numérique
+  - st.checkbox()           → Case à cocher (ex: activer Ledoit-Wolf)
+  - st.button()             → Bouton cliquable
+  - st.spinner()            → Indicateur de chargement
+  - st.dataframe()          → Tableau de données interactif
+  - st.plotly_chart()       → Graphique interactif (Plotly)
+  - st.metric()             → Affiche un grand chiffre
+  - st.download_button()    → Bouton de téléchargement CSV
+  - st.stop()               → Arrête l'exécution si bouton pas encore cliqué
+  - st.caption()            → Texte en petit (signature auteur)
+
+LA PAGE OPTIMIZER EN DÉTAIL :
+  La page 2_Optimizer.py exécute les 4 modèles en parallèle à chaque clic
+  sur "Optimise all models", puis affiche :
+
+  1. Un tableau de comparaison (tableau résumé des 4 modèles : Return/Vol/Sharpe)
+  2. La frontière efficiente avec les 4 modèles placés dessus
+  3. Quatre onglets (tabs) : Max Sharpe / Min Variance / Black-Litterman / Risk Parity
+     Chaque onglet : métriques + camembert + barres + tableau + export CSV
+  4. Dans le tab Risk Parity : graphique supplémentaire des contributions au risque
+
+  La checkbox "Ledoit-Wolf shrinkage" dans le sidebar s'applique à TOUS les modèles.
+  Le sidebar "Black-Litterman views" permet d'ajouter jusqu'à 10 vues d'analystes.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+══════════════════════════════════════════════════════════════════════════════════
+10. RÉSUMÉ DU FLUX COMPLET DE A À Z
+══════════════════════════════════════════════════════════════════════════════════
+
+Voici le chemin complet que suit un euro investi dans ce système :
+
+ÉTAPE 1 — UNIVERS
+  universe.py → "Quelles actions suis-je autorisé à regarder ?"
+  Résultat : une liste de ~40 à 600 symboles boursiers européens
+
+ÉTAPE 2 — DONNÉES
+  data.py → "Quels sont les chiffres pour chaque action ?"
+  - fetch_ohlcv()        → 3 ans de prix de clôture
+  - fetch_fundamentals() → PER, ROE, Marge, etc.
+  - Cache Parquet        → sauvegarde locale pour ne pas re-télécharger
+
+ÉTAPE 3 — SCORING
+  scoring.py → "Quelle est la meilleure action ?"
+  - Z-score de chaque indicateur
+  - Score Value (PER bas, EV/EBIT bas)
+  - Score Quality (ROE élevé, marge élevée)
+  - Score Momentum (hausse récente sur 3M/6M/12M)
+  - Score Revision (croissance bénéfices/CA)
+  - Score Composite = somme pondérée → classement de 0 à 100
+
+ÉTAPE 4 — SENTIMENT (optionnel)
+  sentiment.py → "Qu'est-ce que les journaux disent ?"
+  - FinBERT analyse les 10 dernières news
+  - Score bullish/bearish par action
+
+ÉTAPE 5 — OPTIMISATION (4 modèles)
+  markowitz.py → "Comment répartir l'argent ?"
+  - Estimation de la covariance : historique ou Ledoit-Wolf (recommandé)
+  - Modèle 1 — Max Sharpe     : maximise le ratio rendement/risque (Markowitz)
+  - Modèle 2 — Min Variance   : minimise le risque total (Markowitz défensif)
+  - Modèle 3 — Black-Litterman: combine équilibre marché + vues analystes (Goldman Sachs)
+  - Modèle 4 — Risk Parity    : contributions égales au risque (Bridgewater)
+  - Frontière efficiente : 40 points pour visualiser l'espace risque/rendement
+  - Tableau de comparaison des 4 modèles côte à côte
+
+ÉTAPE 6 — BACKTEST
+  engine.py + metrics.py → "Est-ce que ça aurait marché dans le passé ?"
+  - Walk-forward : optimisation mensuelle avec données historiques uniquement
+  - Simulation des rendements journaliers sur 3 ans
+  - Comparaison avec Euro Stoxx 50
+  - Calcul : CAGR, Sharpe, Sortino, Calmar, Max Drawdown, Alpha, Beta, IR, VaR
+
+ÉTAPE 7 — AFFICHAGE
+  Streamlit → "Comment présenter les résultats ?"
+  - Page Screener  : heatmap + tableau classé + export CSV
+  - Page Optimizer : comparaison 4 modèles + frontière + onglets détaillés + export CSV
+  - Page Backtest  : courbe NAV + drawdown + rolling Sharpe + 10 métriques
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GLOSSAIRE RAPIDE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Action           : part de propriété d'une entreprise cotée en bourse
+Bourse           : marché où s'achètent et se vendent les actions
+CAC 40           : les 40 plus grandes entreprises françaises
+Euro Stoxx 50    : les 50 plus grandes entreprises de la zone euro
+Euro Stoxx 600   : les 600 plus grandes entreprises européennes
+Ticker           : code court d'une action (ex: MC.PA = LVMH à Paris)
+PER (P/E)        : Prix / Bénéfice par action = combien on paie les bénéfices
+ROE              : bénéfice / capitaux propres = efficacité de l'entreprise
+EV               : valeur totale = capitalisation + dettes − trésorerie
+EBIT             : bénéfice avant intérêts et impôts
+Volatilité       : écart-type des rendements = mesure du risque
+Rendement        : gain ou perte en % sur une période
+Dividende        : part des bénéfices reversée aux actionnaires
+Momentum         : tendance haussière ou baissière récente
+Blue chip        : grande entreprise solide et bien connue
+Corrélation      : mesure de la similarité de comportement entre deux actions
+Covariance       : corrélation × vol × vol = outil clé de Markowitz
+Shrinkage        : "rétrécissement" de la covariance vers une cible stable (Ledoit-Wolf)
+Benchmark        : indice de référence pour comparer la performance
+Alpha            : surperformance ajustée du risque de marché
+Beta             : sensibilité aux mouvements du marché
+Sharpe           : rendement extra par unité de risque
+Drawdown         : chute depuis un pic vers un creux
+NAV              : valeur du portefeuille, indexée à 100
+SLSQP            : algorithme d'optimisation mathématique de scipy
+NLP              : traitement automatique du langage naturel
+FinBERT          : modèle IA spécialisé dans les textes financiers
+Parquet          : format de fichier rapide pour stocker des tableaux de données
+Walk-forward     : backtest qui simule l'investissement en temps réel, sans tricher
+Black-Litterman  : modèle Goldman Sachs combinant équilibre marché et vues d'analystes
+Risk Parity      : allocation où chaque actif contribue également au risque total
+ERC              : Equal Risk Contribution = nom technique du Risk Parity
+Prior / Posterior: termes bayésiens : prior = croyance initiale, posterior = après mise à jour
+Delta (BL)       : coefficient d'aversion au risque dans Black-Litterman (typiquement 2.5)
+Tau (BL)         : degré d'incertitude sur le prior dans Black-Litterman (typiquement 0.05)
+Omega (BL)       : matrice d'incertitude sur les vues de l'analyste
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Developed by Oswald Jaures KOFFI
+European Equity Screener — Complete Documentation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
