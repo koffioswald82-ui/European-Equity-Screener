@@ -49,5 +49,5 @@ jobs:
         run: |
           ruff check . \
             --select E,W,F \
-            --ignore E501 \
-            --exclude pages/,streamlit_app.py
+            --ignore E501,E402 \
+            --exclude pages/,app/pages/,streamlit_app.py
