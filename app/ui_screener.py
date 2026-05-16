@@ -75,8 +75,7 @@ custom_weights = {
     "value": w_value, "quality": w_quality,
     "momentum": w_momentum, "revision": w_revision,
 }
-import screener.scoring as sc_mod
-sc_mod.WEIGHTS.update(custom_weights)
+WEIGHTS.update(custom_weights)
 
 with st.spinner("Computing scores..."):
     scored = composite_score(fundamentals, prices, sentiment_df)
