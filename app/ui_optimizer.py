@@ -3,8 +3,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import streamlit as st
-import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 

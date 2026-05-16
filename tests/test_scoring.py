@@ -52,13 +52,14 @@ def test_zscore_constant_series():
 
 
 def test_value_score_cheaper_stock_higher(sample_fundamentals):
-    scores = compute_value_score(sample_fundamentals)
-    # C has lowest P/E and EV/EBIT → should have highest value score
+    df = sample_fundamentals.set_index("ticker")
+    scores = compute_value_score(df)
     assert scores["C"] > scores["D"]
 
 
 def test_quality_score_better_roe_higher(sample_fundamentals):
-    scores = compute_quality_score(sample_fundamentals)
+    df = sample_fundamentals.set_index("ticker")
+    scores = compute_quality_score(df)
     assert scores["C"] > scores["D"]
 
 
